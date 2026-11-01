@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>FilamTrack 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #14171c;
+    --panel: #1c2027;
+    --panel2: #232831;
+    --line: #2e343e;
+    --tx: #ebe9e4;
+    --mut: #9099a6;
+    --acc: #7dd3fc;
+  }
+  
+  html { background: var(--bg); overflow-x: hidden; }
+  body {
+    font-family: Archivo, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--tx);
+    font-variant-numeric: tabular-nums;
+    padding-bottom: clamp(6rem, 10vh, 8rem);
+    min-height: 100vh;
+  }
+  
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+  .inp {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.9rem;
+    color: var(--tx);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .inp:focus { border-color: var(--acc); }
+  .lbl { display: block; font-size: 0.75rem; color: var(--mut); margin-bottom: 0.3rem; font-weight: 500; }
+  
+  .btn {
+    border-radius: 10px;
+    padding: 0.55rem 0.95rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    touch-action: manipulation;
+  }
+  .btn-ghost { background: var(--panel2); border: 1px solid var(--line); color: var(--tx); }
+  .btn-ghost:hover { background: #2b323d; }
+  .btn-main { background: var(--acc); color: #0b1218; }
+  .btn-main:hover { background: #a5e3fd; }
+  
+  .chip {
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid var(--line);
+    color: var(--mut);
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+  .chip.on { background: var(--tx); color: var(--bg); border-color: var(--tx); font-weight: 700; }
+  
+  dialog {
+    background: var(--panel);
+    color: var(--tx);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 0;
+    width: min(34rem, 94vw);
+    max-height: calc(100vh - 2rem);
+    margin: auto;
+    overflow: auto;
+  }
+  dialog::backdrop { background: rgba(6, 8, 11, 0.78); backdrop-filter: blur(4px); }
+  dialog[open] { animation: pop 0.18s ease-out; }
+  
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  
+  #reader { width: 100% !important; background: #000; border-radius: 12px; overflow: hidden; }
+  #reader video { width: 100% !important; height: auto !important; max-height: 55vh !important; object-fit: cover; }
+  
+  .ring { transition: stroke-dashoffset 0.5s ease; }
+  
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    background: var(--tx);
+    color: var(--bg);
+    padding: 0.65rem 1.2rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    z-index: 999;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+    max-width: 90vw;
+    text-align: center;
+  }
+
+  /* Personalización del scrollbar en móviles */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  @media print {
+    body > *:not(#dlg-qr) { display: none !important; }
+    #dlg-qr {
+      display: block !important;
+      position: absolute;
+      inset: 0;
+      width: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      overflow: visible !important;
+      background: #fff !important;
+      color: #000 !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+    }
+    .no-print { display: none !important; }
+    #qr-grid {
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 12px !important;
+      background: #fff !important;
+      padding: 0 !important;
+    }
+    .qr-tag { border: 1px dashed #666 !important; break-inside: avoid; color: #000 !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="sticky top-0 z-30 border-b" style="background:rgba(20,23,28,.92); backdrop-filter:blur(8px); border-color:var(--line); padding-top:env(safe-area-inset-top, 0px)">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+    <h1 class="text-lg sm:text-xl font-extrabold tracking-tight truncate">🧵 FilamTrack 3D</h1>
+    <div class="flex gap-2 shrink-0">
+      <button id="b-gen" class="btn btn-ghost text-xs sm:text-sm px-2.5 sm:px-4">Etiquetas QR</button>
+      <button id="b-new" class="btn btn-main text-xs sm:text-sm px-3 sm:px-4">+ Nuevo</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 pt-5 space-y-5">
+  <!-- Tarjetas de Estadísticas Responsive -->
+  <section id="stats" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></section>
+
+  <!-- Filtros y Búsqueda -->
+  <section class="space-y-3">
+    <input id="q" class="inp" style="padding:.75rem 1rem" placeholder="Buscar por color, marca, código o ubicación...">
+    <div id="chips" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar"></div>
+  </section>
+
+  <!-- Grilla de Rollos Responsive -->
+  <section id="grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></section>
+  <p class="text-center text-xs py-2" style="color:var(--mut)">Sincronizado en tiempo real con Google Sheets.</p>
+</main>
+
+<!-- Botón Flotante para Escanear QR en Móviles -->
+<button id="b-scan" class="fixed right-4 sm:right-6 btn btn-main flex items-center gap-2 shadow-2xl z-20" style="bottom:calc(1.2rem + env(safe-area-inset-bottom, 0px)); padding:.85rem 1.2rem; border-radius:999px">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/></svg>
+  <span class="font-bold text-sm">Escanear QR</span>
+</button>
+
+<!-- Formulario de Agregar / Editar -->
+<dialog id="dlg-form">
+  <form id="form" class="p-4 sm:p-6 space-y-4">
+    <h2 id="f-title" class="text-lg font-extrabold">Nuevo rollo</h2>
+    
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="lbl">Código QR</label>
+        <input id="f-id" class="inp" required>
+      </div>
+      <div>
+        <label class="lbl">Material</label>
+        <select id="f-mat" class="inp">
+          <option>PLA</option><option>PETG</option><option>TPU</option>
+          <option>ABS</option><option>ASA</option><option>Silk</option><option>Nylon</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="lbl">Marca</label>
+        <input id="f-marca" class="inp" placeholder="Grilon3" required>
+      </div>
+      <div>
+        <label class="lbl">Color</label>
+        <div class="flex gap-2">
+          <input id="f-color" class="inp" placeholder="Negro mate" required>
+          <input id="f-hex" type="color" value="#222222" class="h-[38px] w-12 shrink-0 rounded-lg border-0 bg-transparent p-0 cursor-pointer" aria-label="Color del rollo">
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="lbl">Peso inicial (g)</label>
+        <input id="f-total" type="number" min="1" value="1000" class="inp" required>
+      </div>
+      <div>
+        <label class="lbl">Restante (g)</label>
+        <input id="f-rest" type="number" min="0" value="1000" class="inp" required>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="lbl">Estado</label>
+        <select id="f-estado" class="inp">
+          <option>Sellado</option><option>En uso</option><option>Agotado</option>
+        </select>
+      </div>
+      <div>
+        <label class="lbl">Ubicación</label>
+        <input id="f-ubi" class="inp" placeholder="Estante A" required>
+      </div>
+    </div>
+
+    <p id="f-err" class="text-sm hidden" style="color:#fb7185"></p>
+    
+    <div class="flex justify-end gap-2 pt-2">
+      <button type="button" id="f-cancel" class="btn btn-ghost flex-1 sm:flex-none">Cancelar</button>
+      <button type="submit" class="btn btn-main flex-1 sm:flex-none">Guardar rollo</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Escáner QR Responsive -->
+<dialog id="dlg-scan">
+  <div class="p-4 sm:p-5">
+    <h2 class="text-base sm:text-lg font-extrabold mb-3 text-center sm:text-left">Apuntá al código QR del rollo</h2>
+    <div id="reader" class="rounded-xl overflow-hidden bg-black"></div>
+    <p id="scan-err" class="text-xs sm:text-sm mt-3 hidden text-center" style="color:#fb7185"></p>
+    <button id="scan-close" class="btn btn-ghost w-full mt-4">Cerrar cámara</button>
+  </div>
+</dialog>
+
+<!-- Modal de Etiquetas QR para Imprimir -->
+<dialog id="dlg-qr" style="width:min(56rem, 95vw)">
+  <div class="p-4 sm:p-5 space-y-4">
+    <div class="no-print grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3 items-end">
+      <div class="col-span-2 sm:col-span-1">
+        <label class="lbl">Prefijo</label>
+        <input id="g-pref" class="inp" value="SPOOL-">
+      </div>
+      <div>
+        <label class="lbl">Desde</label>
+        <input id="g-from" type="number" min="1" value="1" class="inp">
+      </div>
+      <div>
+        <label class="lbl">Cantidad</label>
+        <input id="g-cant" type="number" min="1" max="60" value="12" class="inp">
+      </div>
+      <div class="col-span-2 sm:col-span-2 flex gap-2">
+        <button id="g-go" class="btn btn-ghost flex-1">Generar</button>
+        <button id="g-print" class="btn btn-main flex-1">Imprimir</button>
+      </div>
+    </div>
+    <div id="qr-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-3 sm:p-4 rounded-xl" style="background:#fff"></div>
+    <div class="no-print flex justify-end">
+      <button id="g-close" class="btn btn-ghost w-full sm:w-auto">Cerrar</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let rollos = [], filtroMat = 'Todos', editandoId = null, scanner = null;
+
+// Cargar datos desde Google Sheets mediante Apps Script
+function cargar() {
+  $('grid').innerHTML = `<div class="col-span-full panel text-center py-14 px-4"><p class="font-bold text-lg">Cargando biblioteca desde Google Sheets...</p></div>`;
+  if (typeof google !== 'undefined' && google.script) {
+    google.script.run.withSuccessHandler(data => {
+      rollos = (data || []).map(r => ({
+        id: String(r.id_qr || r.id),
+        material: r.material || 'PLA',
+        marca: r.marca || '',
+        color: r.color || '',
+        hex: r.hex || '#222222',
+        total: +r.total || 1000,
+        restante: +r.restante ?? 1000,
+        estado: r.estado || 'Sellado',
+        ubicacion: r.ubicacion || ''
+      }));
+      render();
+    }).obtenerRollos();
+  } else {
+    render();
+  }
+}
+
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+
+const pct = r => r.total > 0 ? Math.max(0, Math.min(100, Math.round(r.restante / r.total * 100))) : 0;
+const nivel = p => p > 50 ? '#6ee7b7' : p > 20 ? '#fcd34d' : '#fb7185';
+
+function ring(r) {
+  const p = pct(r), C = 2 * Math.PI * 28, off = C * (1 - p / 100);
+  return `<svg width="68" height="68" viewBox="0 0 76 76" class="shrink-0" role="img" aria-label="${p}% restante">
+    <circle cx="38" cy="38" r="28" fill="none" stroke="#2e343e" stroke-width="7"/>
+    <circle class="ring" cx="38" cy="38" r="28" fill="none" stroke="${nivel(p)}" stroke-width="7" stroke-linecap="round"
+      stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 38 38)"/>
+    <circle cx="38" cy="38" r="17" fill="${esc(r.hex)}" stroke="#5a6372" stroke-width="1.5"/>
+    <circle cx="38" cy="38" r="4" fill="#14171c"/>
+  </svg>`;
+}
+
+function render() {
+  const q = $('q').value.trim().toLowerCase();
+  const lista = rollos.filter(r =>
+    (filtroMat === 'Todos' || r.material === filtroMat) &&
+    [r.color, r.marca, r.id, r.ubicacion, r.material].some(v => String(v).toLowerCase().includes(q)));
+
+  const gramos = rollos.reduce((a, r) => a + r.restante, 0);
+  const bajos = rollos.filter(r => r.estado !== 'Agotado' && pct(r) <= 20).length;
+  
+  $('stats').innerHTML = [
+    ['Rollos totales', rollos.length], 
+    ['Filamento disponible', (gramos / 1000).toFixed(1) + ' kg'], 
+    ['Por acabarse', bajos]
+  ].map(([l, v]) => `
+    <div class="panel p-3.5 flex justify-between sm:block items-center">
+      <div class="text-xs font-semibold" style="color:var(--mut)">${l}</div>
+      <div class="text-xl sm:text-2xl font-extrabold mt-0.5">${v}</div>
+    </div>
+  `).join('');
+
+  const mats = ['Todos', ...new Set(rollos.map(r => r.material))];
+  if (!mats.includes(filtroMat)) filtroMat = 'Todos';
+  $('chips').innerHTML = mats.map(m => `<button class="chip ${m === filtroMat ? 'on' : ''}" data-mat="${esc(m)}">${esc(m)}</button>`).join('');
+
+  if (!lista.length) {
+    $('grid').innerHTML = `<div class="col-span-full panel text-center py-12 px-4">
+      <p class="font-bold text-lg">${rollos.length ? 'Ningún rollo coincide con la búsqueda' : 'Todavía no cargaste rollos'}</p>
+      <p class="text-sm mt-1" style="color:var(--mut)">${rollos.length ? 'Probá con otro color, marca o ubicación.' : 'Agregá el primero o escaneá una etiqueta QR para registrarlo.'}</p></div>`;
+    return;
+  }
+  
+  $('grid').innerHTML = lista.map(r => {
+    const p = pct(r), bajo = r.estado !== 'Agotado' && p <= 20;
+    return `<article class="panel p-4 flex flex-col justify-between gap-3 shadow-lg" data-id="${esc(r.id)}">
+      <div class="space-y-3">
+        <div class="flex gap-3 items-center">
+          ${ring(r)}
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-bold tracking-wider" style="color:var(--mut)">${esc(r.id)}</div>
+            <h3 class="font-extrabold text-base sm:text-lg leading-tight truncate">${esc(r.color)}</h3>
+            <p class="text-xs sm:text-sm" style="color:var(--mut)"><b style="color:var(--tx)">${esc(r.material)}</b> · ${esc(r.marca)}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-lg sm:text-xl font-extrabold">${p}%</div>
+            <div class="text-xs" style="color:var(--mut)">${r.restante} g</div>
+          </div>
+        </div>
+        
+        <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/80">
+          <span class="truncate max-w-[60%]" style="color:var(--mut)">Ubi: <b style="color:var(--tx)">${esc(r.ubicacion)}</b></span>
+          <span class="px-2 py-0.5 rounded-md font-bold shrink-0" style="background:var(--panel2);color:${bajo ? '#fb7185' : 'var(--mut)'}">${bajo ? 'Stock bajo' : esc(r.estado)}</span>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2 border-t" style="border-color:var(--line)">
+        <button class="btn btn-ghost flex-1 text-xs" data-act="uso">Descontar</button>
+        <button class="btn btn-ghost text-xs px-2.5" data-act="edit">Editar</button>
+        <button class="btn btn-ghost text-xs px-2.5" style="color:#fb7185" data-act="del" aria-label="Eliminar">Borrar</button>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+/* ---------- Formulario ---------- */
+function siguienteId() {
+  let n = rollos.length + 1;
+  while (rollos.some(r => r.id.toLowerCase() === `spool-${String(n).padStart(3, '0')}`)) n++;
+  return `SPOOL-${String(n).padStart(3, '0')}`;
+}
+
+function abrirForm(r, idNuevo) {
+  editandoId = r ? r.id : null;
+  $('form').reset(); 
+  $('f-err').classList.add('hidden');
+  $('f-title').textContent = r ? 'Editar rollo' : 'Nuevo rollo';
+  $('f-id').value = r ? r.id : (idNuevo || siguienteId());
+  if (r) {
+    $('f-mat').value = r.material; 
+    $('f-marca').value = r.marca; 
+    $('f-color').value = r.color; 
+    $('f-hex').value = r.hex;
+    $('f-total').value = r.total; 
+    $('f-rest').value = r.restante; 
+    $('f-estado').value = r.estado; 
+    $('f-ubi').value = r.ubicacion;
+  }
+  $('dlg-form').showModal();
+}
+
+$('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const d = {
+    id_qr: $('f-id').value.trim(),
+    material: $('f-mat').value,
+    marca: $('f-marca').value.trim(),
+    color: $('f-color').value.trim(),
+    hex: $('f-hex').value,
+    total: Math.max(1, +$('f-total').value || 1000),
+    restante: Math.max(0, +$('f-rest').value || 0),
+    estado: $('f-estado').value,
+    ubicacion: $('f-ubi').value.trim()
+  };
+  d.restante = Math.min(d.restante, d.total);
+  
+  if (rollos.some(r => r.id.toLowerCase() === d.id_qr.toLowerCase() && r.id !== editandoId)) {
+    $('f-err').textContent = `Ya existe un rollo con el código "${d.id_qr}".`;
+    $('f-err').classList.remove('hidden'); 
+    return;
+  }
+  if (d.restante === 0) d.estado = 'Agotado';
+
+  toast('Guardando cambios...');
+  google.script.run.withSuccessHandler(() => {
+    $('dlg-form').close();
+    toast('Rollo guardado correctamente');
+    cargar();
+  }).guardarRollo(d);
+});
+
+$('f-cancel').onclick = () => $('dlg-form').close();
+$('b-new').onclick = () => abrirForm();
+
+/* ---------- Acciones en Tarjetas ---------- */
+$('grid').addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]'); if (!btn) return;
+  const r = rollos.find(x => x.id === btn.closest('[data-id]').dataset.id); if (!r) return;
+  
+  if (btn.dataset.act === 'edit') abrirForm(r);
+  
+  if (btn.dataset.act === 'del' && confirm(`¿Eliminar el rollo ${r.id} (${r.color})?`)) {
+    toast('Eliminando rollo...');
+    google.script.run.withSuccessHandler(() => {
+      toast('Rollo eliminado');
+      cargar();
+    }).eliminarRollo(r.id);
+  }
+  
+  if (btn.dataset.act === 'uso') {
+    const g = parseFloat(prompt(`¿Cuántos gramos usaste de ${r.color}? (Quedan: ${r.restante} g)`));
+    if (!isFinite(g) || g <= 0) return;
+    const nuevoRestante = Math.max(0, Math.round(r.restante - g));
+    const nuevoEstado = nuevoRestante === 0 ? 'Agotado' : 'En uso';
+    
+    const d = {
+      id_qr: r.id, material: r.material, marca: r.marca, color: r.color, hex: r.hex,
+      total: r.total, restante: nuevoRestante, estado: nuevoEstado, ubicacion: r.ubicacion
+    };
+    
+    toast('Actualizando consumo...');
+    google.script.run.withSuccessHandler(() => {
+      toast(nuevoRestante === 0 ? 'Rollo agotado' : `Quedan ${nuevoRestante} g`);
+      cargar();
+    }).guardarRollo(d);
+  }
+});
+
+$('chips').addEventListener('click', e => { 
+  const c = e.target.closest('[data-mat]'); 
+  if (c) { filtroMat = c.dataset.mat; render(); } 
+});
+
+$('q').addEventListener('input', render);
+
+/* ---------- Escáner QR Responsive ---------- */
+async function detenerScanner() {
+  if (scanner) { 
+    try { await scanner.stop(); } catch {} 
+    try { scanner.clear(); } catch {} 
+    scanner = null; 
+  }
+}
+
+async function cerrarScan() { 
+  await detenerScanner(); 
+  if ($('dlg-scan').open) $('dlg-scan').close(); 
+}
+
+$('b-scan').onclick = async () => {
+  $('scan-err').classList.add('hidden');
+  $('dlg-scan').showModal();
+  try {
+    scanner = new Html5Qrcode('reader');
+    await scanner.start(
+      { facingMode: 'environment' }, 
+      { fps: 10, qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          return { width: Math.floor(minEdge * 0.75), height: Math.floor(minEdge * 0.75) };
+        } 
+      }, 
+      async texto => {
+        await cerrarScan();
+        const code = texto.trim();
+        const r = rollos.find(x => x.id.toLowerCase() === code.toLowerCase());
+        if (r) abrirForm(r);
+        else if (confirm(`El código "${code}" no está registrado. ¿Querés crearlo?`)) abrirForm(null, code);
+      }, 
+      () => {}
+    );
+  } catch (err) {
+    $('scan-err').textContent = 'No se pudo abrir la cámara. Permití el acceso y abrí la página con protocolo HTTPS.';
+    $('scan-err').classList.remove('hidden');
+  }
+};
+
+$('scan-close').onclick = cerrarScan;
+$('dlg-scan').addEventListener('close', detenerScanner);
+
+/* ---------- Etiquetas QR Imprimibles ---------- */
+function generarGrilla() {
+  const cont = $('qr-grid'); 
+  cont.innerHTML = '';
+  const pref = $('g-pref').value;
+  const desde = Math.max(1, +$('g-from').value || 1);
+  const cant = Math.min(60, Math.max(1, +$('g-cant').value || 12));
+  
+  for (let i = desde; i < desde + cant; i++) {
+    const codigo = pref + String(i).padStart(3, '0');
+    const box = document.createElement('div');
+    box.className = 'qr-tag flex flex-col items-center p-2 rounded-lg justify-center';
+    box.style.cssText = 'border:1px solid #cbd5e1; background:#fff; color:#111;';
+    
+    const qr = document.createElement('div'); 
+    box.appendChild(qr);
+    
+    const s = document.createElement('span'); 
+    s.textContent = codigo; 
+    s.style.cssText = 'font-weight:800; font-size:.75rem; margin-top:4px;';
+    
+    box.appendChild(s); 
+    cont.appendChild(box);
+    
+    new QRCode(qr, { text: codigo, width: 84, height: 84, correctLevel: QRCode.CorrectLevel.M });
+  }
+}
+
+$('b-gen').onclick = () => { $('dlg-qr').showModal(); generarGrilla(); };
+$('g-go').onclick = generarGrilla;
+$('g-print').onclick = () => window.print();
+$('g-close').onclick = () => $('dlg-qr').close();
+
+// Inicializar al cargar
+cargar();
+</script>
+</body>
+</html>
