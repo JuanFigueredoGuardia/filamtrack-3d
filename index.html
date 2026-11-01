@@ -116,7 +116,6 @@
     text-align: center;
   }
 
-  /* Personalización del scrollbar en móviles */
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
@@ -164,27 +163,22 @@
 </header>
 
 <main class="max-w-5xl mx-auto px-4 pt-5 space-y-5">
-  <!-- Tarjetas de Estadísticas Responsive -->
   <section id="stats" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></section>
 
-  <!-- Filtros y Búsqueda -->
   <section class="space-y-3">
     <input id="q" class="inp" style="padding:.75rem 1rem" placeholder="Buscar por color, marca, código o ubicación...">
     <div id="chips" class="flex gap-2 overflow-x-auto pb-1 no-scrollbar"></div>
   </section>
 
-  <!-- Grilla de Rollos Responsive -->
   <section id="grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></section>
   <p class="text-center text-xs py-2" style="color:var(--mut)">Sincronizado en tiempo real con Google Sheets.</p>
 </main>
 
-<!-- Botón Flotante para Escanear QR en Móviles -->
 <button id="b-scan" class="fixed right-4 sm:right-6 btn btn-main flex items-center gap-2 shadow-2xl z-20" style="bottom:calc(1.2rem + env(safe-area-inset-bottom, 0px)); padding:.85rem 1.2rem; border-radius:999px">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/></svg>
   <span class="font-bold text-sm">Escanear QR</span>
 </button>
 
-<!-- Formulario de Agregar / Editar -->
 <dialog id="dlg-form">
   <form id="form" class="p-4 sm:p-6 space-y-4">
     <h2 id="f-title" class="text-lg font-extrabold">Nuevo rollo</h2>
@@ -250,7 +244,6 @@
   </form>
 </dialog>
 
-<!-- Escáner QR Responsive -->
 <dialog id="dlg-scan">
   <div class="p-4 sm:p-5">
     <h2 class="text-base sm:text-lg font-extrabold mb-3 text-center sm:text-left">Apuntá al código QR del rollo</h2>
@@ -260,7 +253,6 @@
   </div>
 </dialog>
 
-<!-- Modal de Etiquetas QR para Imprimir -->
 <dialog id="dlg-qr" style="width:min(56rem, 95vw)">
   <div class="p-4 sm:p-5 space-y-4">
     <div class="no-print grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3 items-end">
@@ -289,15 +281,19 @@
 </dialog>
 
 <script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyg5Gm3NuMPkPdTz17nyv-S_G_uRw_vY3maTXarDaVWqDSy-Ea1nNl-YKL2QK8RSe01iQ/exec';
+
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let rollos = [], filtroMat = 'Todos', editandoId = null, scanner = null;
 
-// Cargar datos desde Google Sheets mediante Apps Script
+// Cargar datos desde Google Sheets mediante petición fetch a la Web App
 function cargar() {
   $('grid').innerHTML = `<div class="col-span-full panel text-center py-14 px-4"><p class="font-bold text-lg">Cargando biblioteca desde Google Sheets...</p></div>`;
-  if (typeof google !== 'undefined' && google.script) {
-    google.script.run.withSuccessHandler(data => {
+  
+  fetch(APPS_SCRIPT_URL)
+    .then(res => res.json())
+    .then(data => {
       rollos = (data || []).map(r => ({
         id: String(r.id_qr || r.id),
         material: r.material || 'PLA',
@@ -310,10 +306,11 @@ function cargar() {
         ubicacion: r.ubicacion || ''
       }));
       render();
-    }).obtenerRollos();
-  } else {
-    render();
-  }
+    })
+    .catch(err => {
+      console.error(err);
+      $('grid').innerHTML = `<div class="col-span-full panel text-center py-14 px-4"><p class="font-bold text-lg text-rose-400">Error al conectar con Google Sheets</p></div>`;
+    });
 }
 
 function toast(msg) {
@@ -427,31 +424,43 @@ function abrirForm(r, idNuevo) {
 $('form').addEventListener('submit', e => {
   e.preventDefault();
   const d = {
-    id_qr: $('f-id').value.trim(),
-    material: $('f-mat').value,
-    marca: $('f-marca').value.trim(),
-    color: $('f-color').value.trim(),
-    hex: $('f-hex').value,
-    total: Math.max(1, +$('f-total').value || 1000),
-    restante: Math.max(0, +$('f-rest').value || 0),
-    estado: $('f-estado').value,
-    ubicacion: $('f-ubi').value.trim()
+    tipo: 'guardar',
+    params: {
+      id_qr: $('f-id').value.trim(),
+      material: $('f-mat').value,
+      marca: $('f-marca').value.trim(),
+      color: $('f-color').value.trim(),
+      hex: $('f-hex').value,
+      total: Math.max(1, +$('f-total').value || 1000),
+      restante: Math.max(0, +$('f-rest').value || 0),
+      estado: $('f-estado').value,
+      ubicacion: $('f-ubi').value.trim()
+    }
   };
-  d.restante = Math.min(d.restante, d.total);
+  d.params.restante = Math.min(d.params.restante, d.params.total);
   
-  if (rollos.some(r => r.id.toLowerCase() === d.id_qr.toLowerCase() && r.id !== editandoId)) {
-    $('f-err').textContent = `Ya existe un rollo con el código "${d.id_qr}".`;
+  if (rollos.some(r => r.id.toLowerCase() === d.params.id_qr.toLowerCase() && r.id !== editandoId)) {
+    $('f-err').textContent = `Ya existe un rollo con el código "${d.params.id_qr}".`;
     $('f-err').classList.remove('hidden'); 
     return;
   }
-  if (d.restante === 0) d.estado = 'Agotado';
+  if (d.params.restante === 0) d.params.estado = 'Agotado';
 
   toast('Guardando cambios...');
-  google.script.run.withSuccessHandler(() => {
+  
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(d)
+  })
+  .then(res => res.json())
+  .then(res => {
     $('dlg-form').close();
     toast('Rollo guardado correctamente');
     cargar();
-  }).guardarRollo(d);
+  })
+  .catch(err => {
+    alert('Error al guardar en Google Sheets: ' + err);
+  });
 });
 
 $('f-cancel').onclick = () => $('dlg-form').close();
@@ -466,10 +475,17 @@ $('grid').addEventListener('click', e => {
   
   if (btn.dataset.act === 'del' && confirm(`¿Eliminar el rollo ${r.id} (${r.color})?`)) {
     toast('Eliminando rollo...');
-    google.script.run.withSuccessHandler(() => {
+    
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'eliminar', id: r.id })
+    })
+    .then(res => res.json())
+    .then(() => {
       toast('Rollo eliminado');
       cargar();
-    }).eliminarRollo(r.id);
+    })
+    .catch(err => alert('Error al eliminar'));
   }
   
   if (btn.dataset.act === 'uso') {
@@ -479,15 +495,24 @@ $('grid').addEventListener('click', e => {
     const nuevoEstado = nuevoRestante === 0 ? 'Agotado' : 'En uso';
     
     const d = {
-      id_qr: r.id, material: r.material, marca: r.marca, color: r.color, hex: r.hex,
-      total: r.total, restante: nuevoRestante, estado: nuevoEstado, ubicacion: r.ubicacion
+      tipo: 'guardar',
+      params: {
+        id_qr: r.id, material: r.material, marca: r.marca, color: r.color, hex: r.hex,
+        total: r.total, restante: nuevoRestante, estado: nuevoEstado, ubicacion: r.ubicacion
+      }
     };
     
     toast('Actualizando consumo...');
-    google.script.run.withSuccessHandler(() => {
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify(d)
+    })
+    .then(res => res.json())
+    .then(() => {
       toast(nuevoRestante === 0 ? 'Rollo agotado' : `Quedan ${nuevoRestante} g`);
       cargar();
-    }).guardarRollo(d);
+    })
+    .catch(err => alert('Error al actualizar'));
   }
 });
 
@@ -573,7 +598,7 @@ function generarGrilla() {
 $('b-gen').onclick = () => { $('dlg-qr').showModal(); generarGrilla(); };
 $('g-go').onclick = generarGrilla;
 $('g-print').onclick = () => window.print();
-$('g-close').onclick = () => $('dlg-qr').close();
+$('g-close').onclick = () => $('dlg-close') ? $('dlg-close').close() : $('dlg-qr').close();
 
 // Inicializar al cargar
 cargar();
